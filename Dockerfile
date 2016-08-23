@@ -13,3 +13,5 @@ CMD node app --setup && npm start
 
 # the default port for NodeBB is exposed outside the container
 EXPOSE 4567
+
+#
