@@ -9,7 +9,7 @@ ENV NODE_ENV=production \
 
 # nodebb setup will ask you for connection information to a redis (default), mongodb then run the forum
 # nodebb upgrade is not included and might be desired
-CMD node app --setup && npm start
+CMD node app --setup="{\"url\":\"http://127.0.0.1:4567/\",\"secret\":\"${mongosecret}\",\"database\":\"mongo\",\"mongo:host\":\"mongodb\",\"mongo:port\":27017,\"mongo:username\":\"\",\"mongo:password\":\"\",\"mongo:database\":0,\"redis:host\":\"redis\",\"redis:port\":6379,\"redis:password\":\"\",\"redis:database\":0,\"admin:username\":\"${adminusername}\",\"admin:email\":\"${adminuseremail}\",\"admin:password\":\"${adminusername}\",\"admin:password:confirm\":\"${adminusername}\"}" && npm start
 
 # the default port for NodeBB is exposed outside the container
 EXPOSE 4567
