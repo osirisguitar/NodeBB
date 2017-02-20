@@ -1,0 +1,21 @@
+mongodb:
+  image: mongo
+  ports:
+    - "27017:27017"
+  volumes:
+    - /data/nodebb/mongo:/data/db
+redis:
+  image: redis
+  ports:
+    - "6379:6379"
+  volumes:
+    - /data/nodebb/redis:/data
+mongo-backup:
+  environment:
+    - MAX_BACKUPS=3
+  image: 'tutum/mongodb-backup:latest'
+  links:
+    - mongodb
+  restart: always
+  volumes:
+    - '/data/nodebb/backup/mongodb:/backup'

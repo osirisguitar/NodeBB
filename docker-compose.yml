@@ -1,0 +1,27 @@
+mongodb:
+  image: mongo
+  ports:
+    - "27017:27017"
+  volumes:
+    - /data/nodebb/mongo:/data/db
+redis:
+  image: redis
+  ports:
+    - "6379:6379"
+  volumes:
+    - /data/nodebb/redis:/data
+nodebb:
+  build: .
+  ports:
+    - "4567:4567"
+  environment:
+    - adminuseremail=${adminuseremail}
+    - adminusername=${adminusername}
+    - adminuserpassword=${adminuserpassword}
+    - mongosecret=${mongosecret}
+    - siteurl=${siteurl}
+  links:
+    - redis
+    - mongodb
+  volumes:
+    - /data/nodebb/uploads:/usr/src/app/public/uploads
