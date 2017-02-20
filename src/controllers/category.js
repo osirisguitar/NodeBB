@@ -15,11 +15,12 @@ var utils = require('../../public/src/utils');
 
 var categoryController = {};
 
-categoryController.get = function(req, res, callback) {
+categoryController.get = function (req, res, callback) {
 	var cid = req.params.category_id;
 	var currentPage = parseInt(req.query.page, 10) || 1;
 	var pageCount = 1;
 	var userPrivileges;
+	var settings;
 
 	if ((req.params.topic_index && !utils.isNumber(req.params.topic_index)) || !utils.isNumber(cid)) {
 		return callback();
@@ -28,13 +29,13 @@ categoryController.get = function(req, res, callback) {
 	async.waterfall([
 		function (next) {
 			async.parallel({
-				categoryData: function(next) {
+				categoryData: function (next) {
 					categories.getCategoryFields(cid, ['slug', 'disabled', 'topic_count'], next);
 				},
-				privileges: function(next) {
+				privileges: function (next) {
 					privileges.categories.get(cid, req.uid, next);
 				},
-				userSettings: function(next) {
+				userSettings: function (next) {
 					user.getSettings(req.uid, next);
 				}
 			}, next);
@@ -54,7 +55,7 @@ categoryController.get = function(req, res, callback) {
 				return helpers.redirect(res, '/category/' + results.categoryData.slug);
 			}
 
-			var settings = results.userSettings;
+			settings = results.userSettings;
 			var topicIndex = utils.isNumber(req.params.topic_index) ? parseInt(req.params.topic_index, 10) - 1 : 0;
 			var topicCount = parseInt(results.categoryData.topic_count, 10);
 			pageCount = Math.max(1, Math.ceil(topicCount / settings.topicsPerPage));
@@ -89,7 +90,7 @@ categoryController.get = function(req, res, callback) {
 			var start = (currentPage - 1) * settings.topicsPerPage + topicIndex;
 			var stop = start + settings.topicsPerPage - 1;
 
-			next(null, {
+			var payload = {
 				cid: cid,
 				set: set,
 				reverse: reverse,
@@ -97,19 +98,30 @@ categoryController.get = function(req, res, callback) {
 				stop: stop,
 				uid: req.uid,
 				settings: settings
-			});
-		},
-		function (payload, next) {
-			user.getUidByUserslug(req.query.author, function(err, uid) {
-				payload.targetUid = uid;
-				if (uid) {
-					payload.set = 'cid:' + cid + ':uid:' + uid + ':tids';
+			};
+
+			async.waterfall([
+				function (next) {
+					user.getUidByUserslug(req.query.author, next);
+				},
+				function (uid, next) {
+					payload.targetUid = uid;
+					if (uid) {
+						payload.set = 'cid:' + cid + ':uid:' + uid + ':tids';
+					}
+
+					if (req.query.tag) {
+						if (Array.isArray(req.query.tag)) {
+							payload.set = [payload.set].concat(req.query.tag.map(function (tag) {
+								return 'tag:' + tag + ':topics';
+							}));
+						} else {
+							payload.set = [payload.set, 'tag:' + req.query.tag + ':topics'];
+						}
+					}
+					categories.getCategoryById(payload, next);
 				}
-				next(err, payload);
-			});
-		},
-		function (payload, next) {
-			categories.getCategoryById(payload, next);
+			], next);
 		},
 		function (categoryData, next) {
 
@@ -126,7 +138,7 @@ categoryController.get = function(req, res, callback) {
 					url: nconf.get('relative_path') + '/category/' + categoryData.slug
 				}
 			];
-			helpers.buildCategoryBreadcrumbs(categoryData.parentCid, function(err, crumbs) {
+			helpers.buildCategoryBreadcrumbs(categoryData.parentCid, function (err, crumbs) {
 				if (err) {
 					return next(err);
 				}
@@ -140,7 +152,7 @@ categoryController.get = function(req, res, callback) {
 			}
 			var allCategories = [];
 			categories.flattenCategories(allCategories, categoryData.children);
-			categories.getRecentTopicReplies(allCategories, req.uid, function(err) {
+			categories.getRecentTopicReplies(allCategories, req.uid, function (err) {
 				next(err, categoryData);
 			});
 		}
@@ -190,11 +202,16 @@ categoryController.get = function(req, res, callback) {
 			}
 		];
 
+		if (parseInt(req.uid, 10)) {
+			categories.markAsRead([cid], req.uid);
+		}
+
 		categoryData['feeds:disableRSS'] = parseInt(meta.config['feeds:disableRSS'], 10) === 1;
 		categoryData.rssFeedUrl = nconf.get('relative_path') + '/category/' + categoryData.cid + '.rss';
 		categoryData.title = categoryData.name;
+		pageCount = Math.max(1, Math.ceil(categoryData.topic_count / settings.topicsPerPage));
 		categoryData.pagination = pagination.create(currentPage, pageCount, req.query);
-		categoryData.pagination.rel.forEach(function(rel) {
+		categoryData.pagination.rel.forEach(function (rel) {
 			rel.href = nconf.get('url') + '/category/' + categoryData.slug + rel.href;
 			res.locals.linkTags.push(rel);
 		});

@@ -448,7 +448,7 @@ define('settings', function () {
 			helper.persistSettings(hash, Settings.cfg, notify, callback);
 		},
 		load: function (hash, formEl, callback) {
-			callback = callback || function() {};
+			callback = callback || function () {};
 			socket.emit('admin.settings.get', {
 				hash: hash
 			}, function (err, values) {
@@ -468,13 +468,13 @@ define('settings', function () {
 				}
 
 				$(formEl).deserialize(values);
-				$(formEl).find('input[type="checkbox"]').each(function() {
+				$(formEl).find('input[type="checkbox"]').each(function () {
 					$(this).parents('.mdl-switch').toggleClass('is-checked', $(this).is(':checked'));
 				});
 				$(window).trigger('action:admin.settingsLoaded');
 
 				// Handle unsaved changes
-				$(formEl).on('change', 'input, select, textarea', function() {
+				$(formEl).on('change', 'input, select, textarea', function () {
 					app.flags = app.flags || {};
 					app.flags._unsaved = true;
 				});
@@ -495,7 +495,7 @@ define('settings', function () {
 				});
 
 				// Normalizing value of multiple selects
-				formEl.find('select[multiple]').each(function(idx, selectEl) {
+				formEl.find('select[multiple]').each(function (idx, selectEl) {
 					selectEl = $(selectEl);
 					values[selectEl.attr('name')] = JSON.stringify(selectEl.val());
 				});
@@ -508,13 +508,21 @@ define('settings', function () {
 					app.flags._unsaved = false;
 
 					if (typeof callback === 'function') {
-						callback();
+						callback(err);
 					} else {
-						app.alert({
-							title: 'Settings Saved',
-							type: 'success',
-							timeout: 2500
-						});
+						if (err) {
+							app.alert({
+								title: 'Error while saving settings',
+								type: 'error',
+								timeout: 2500
+							});
+						} else {
+							app.alert({
+								title: 'Settings Saved',
+								type: 'success',
+								timeout: 2500
+							});
+						}
 					}
 				});
 			}

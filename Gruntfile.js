@@ -2,11 +2,12 @@
 
 var fork = require('child_process').fork,
 	env = process.env,
-	worker,
-	incomplete = [];
+	worker, updateWorker,
+	incomplete = [],
+	running = 0;
 
 
-module.exports = function(grunt) {
+module.exports = function (grunt) {
 	var args = [];
 	if (!grunt.option('verbose')) {
 		args.push('--log-level=info');
@@ -19,38 +20,45 @@ module.exports = function(grunt) {
 			time = Date.now();
 		
 		if (target === 'lessUpdated_Client') {
-			fromFile = ['js', 'tpl', 'acpLess'];
-			compiling = 'clientLess';
+			compiling = 'clientCSS';
 		} else if (target === 'lessUpdated_Admin') {
-			fromFile = ['js', 'tpl', 'clientLess'];
-			compiling = 'acpLess';
+			compiling = 'acpCSS';
 		} else if (target === 'clientUpdated') {
-			fromFile = ['clientLess', 'acpLess', 'tpl'];
 			compiling = 'js';
 		} else if (target === 'templatesUpdated') {
-			fromFile = ['js', 'clientLess', 'acpLess'];
 			compiling = 'tpl';
+		} else if (target === 'langUpdated') {
+			compiling = 'lang';
 		} else if (target === 'serverUpdated') {
-			fromFile = ['clientLess', 'acpLess', 'js', 'tpl'];
+			// Do nothing, just restart
 		}
 
-		fromFile = fromFile.filter(function(ext) {
-			return incomplete.indexOf(ext) === -1;
-		});
+		if (incomplete.indexOf(compiling) === -1) {
+			incomplete.push(compiling);
+		}
 
-		updateArgs.push('--from-file=' + fromFile.join(','));
-		incomplete.push(compiling);
+		updateArgs.push('--build');
+		updateArgs.push(incomplete.join(','));
 
 		worker.kill();
-		worker = fork('app.js', updateArgs, { env: env });
+		if (updateWorker) {
+			updateWorker.kill('SIGKILL');
+		}
+		updateWorker = fork('app.js', updateArgs, { env: env });
+		++running;
+		updateWorker.on('exit', function () {
+			--running;
+			if (running === 0) {
+				worker = fork('app.js', args, { env: env });
+				worker.on('message', function () {
+					if (incomplete.length) {
+						incomplete = [];
 
-		worker.on('message', function() {
-			if (incomplete.length) {
-				incomplete = [];
-
-				if (grunt.option('verbose')) {
-					grunt.log.writeln('NodeBB restarted in ' + (Date.now() - time) + ' ms');
-				}
+						if (grunt.option('verbose')) {
+							grunt.log.writeln('NodeBB restarted in ' + (Date.now() - time) + ' ms');
+						}
+					}
+				});
 			}
 		});
 	}
@@ -87,7 +95,19 @@ module.exports = function(grunt) {
 					'!node_modules/nodebb-*/node_modules/**',
 					'!node_modules/nodebb-*/.git/**'
 				]
-			}
+			},
+			langUpdated: {
+				files: [
+					'public/language/en-GB/*.json',
+					'public/language/en-GB/**/*.json',
+					'node_modules/nodebb-*/**/*.json',
+					'!node_modules/nodebb-*/node_modules/**',
+					'!node_modules/nodebb-*/.git/**',
+					'!node_modules/nodebb-*/plugin.json',
+					'!node_modules/nodebb-*/package.json',
+					'!node_modules/nodebb-*/theme.json',
+				],
+			},
 		}
 	});
 

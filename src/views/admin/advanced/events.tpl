@@ -1,10 +1,10 @@
 <div class="events">
 	<div class="col-lg-9">
 		<div class="panel panel-default">
-			<div class="panel-heading"><i class="fa fa-calendar-o"></i> Events</div>
+			<div class="panel-heading"><i class="fa fa-calendar-o"></i> [[admin/advanced/events:events]]</div>
 			<div class="panel-body" data-next="{next}">
 				<!-- IF !events.length -->
-				<div class="alert alert-info">There are no events</div>
+				<div class="alert alert-info">[[admin/advanced/events:no-events]]</div>
 				<!-- ENDIF !events.length -->
 				<div class="events-list">
 				<!-- BEGIN events -->
@@ -23,15 +23,18 @@
 					<pre>{events.jsonString}</pre>
 				</div>
 				<!-- END events -->
+				<!-- IMPORT partials/paginator.tpl -->
 				</div>
 			</div>
 		</div>
 	</div>
 	<div class="col-lg-3 acp-sidebar">
 		<div class="panel panel-default">
-			<div class="panel-heading">Events Control Panel</div>
+			<div class="panel-heading"></div>
 			<div class="panel-body">
-				<button class="btn btn-warning" data-action="clear"><i class="fa fa-eraser"></i> Delete Events</button>
+				<button class="btn btn-warning" data-action="clear">
+					<i class="fa fa-eraser"></i> [[admin/advanced/events:delete-events]]
+				</button>
 			</div>
 		</div>
 	</div>

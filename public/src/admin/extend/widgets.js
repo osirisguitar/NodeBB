@@ -1,11 +1,11 @@
 "use strict";
-/* global define, app, socket */
+/* global define, app, socket, bootbox */
 
-define('admin/extend/widgets', function() {
+define('admin/extend/widgets', ['jqueryui'], function (jqueryui) {
 	var Widgets = {};
 
-	Widgets.init = function() {		
-		$('#widgets .nav-pills a').on('click', function(ev) {
+	Widgets.init = function () {
+		$('#widgets .nav-pills a').on('click', function (ev) {
 			var $this = $(this);
 			$('#widgets .nav-pills li').removeClass('active');
 			$this.parent().addClass('active');
@@ -17,11 +17,11 @@ define('admin/extend/widgets', function() {
 			return false;
 		});
 
-		$('#widget-selector').on('change', function() {
+		$('#widget-selector').on('change', function () {
 			$('.available-widgets [data-widget]').addClass('hide');
 			$('.available-widgets [data-widget="' + $(this).val() + '"]').removeClass('hide');
 		});
-		
+
 		$('#widget-selector').trigger('change');
 
 		loadWidgetData();
@@ -31,8 +31,8 @@ define('admin/extend/widgets', function() {
 		$('[data-location="drafts"]').insertAfter($('[data-location="drafts"]').closest('.tab-content'));
 
 		$('#widgets .available-widgets .widget-panel').draggable({
-			helper: function(e) {
-				return $(e.target).parents('.widget-panel').clone().addClass('block').width($(e.target.parentNode).width());
+			helper: function (e) {
+				return $(e.target).parents('.widget-panel').clone();
 			},
 			distance: 10,
 			connectToSortable: ".widget-area"
@@ -40,7 +40,7 @@ define('admin/extend/widgets', function() {
 
 		$('#widgets .available-containers .containers > [data-container-html]')
 			.draggable({
-				helper: function(e) {
+				helper: function (e) {
 					var target = $(e.target);
 					target = target.attr('data-container-html') ? target : target.parents('[data-container-html]');
 
@@ -48,24 +48,25 @@ define('admin/extend/widgets', function() {
 				},
 				distance: 10
 			})
-			.each(function() {
+			.each(function () {
 				$(this).attr('data-container-html', $(this).attr('data-container-html').replace(/\\\{([\s\S]*?)\\\}/g, '{$1}'));
 			});
 
 		$('#widgets .widget-area').sortable({
 			update: function (event, ui) {
+				createDatePicker(ui.item);
 				appendToggle(ui.item);
 			},
 			connectWith: "div"
-		}).on('click', '.delete-widget', function() {
+		}).on('click', '.delete-widget', function () {
 			var panel = $(this).parents('.widget-panel');
 
-			bootbox.confirm('Are you sure you wish to delete this widget?', function(confirm) {
+			bootbox.confirm('[[admin/extend/widgets:alert.confirm-delete]]', function (confirm) {
 				if (confirm) {
 					panel.remove();
 				}
 			});
-		}).on('mouseup', '> .panel > .panel-heading', function(evt) {
+		}).on('mouseup', '> .panel > .panel-heading', function (evt) {
 			if ( !( $(this).parent().is('.ui-sortable-helper') || $(evt.target).closest('.delete-widget').length ) ) {
 				$(this).parent().children('.panel-body').toggleClass('hidden');
 			}
@@ -76,7 +77,7 @@ define('admin/extend/widgets', function() {
 		function saveWidgets() {
 			var total = $('#widgets [data-template][data-location]').length;
 
-			$('#widgets [data-template][data-location]').each(function(i, el) {
+			$('#widgets [data-template][data-location]').each(function (i, el) {
 				el = $(el);
 
 				var template = el.attr('data-template'),
@@ -84,7 +85,7 @@ define('admin/extend/widgets', function() {
 					area = el.children('.widget-area'),
 					widgets = [];
 
-				area.find('.widget-panel[data-widget]').each(function() {
+				area.find('.widget-panel[data-widget]').each(function () {
 					var widgetData = {},
 						data = $(this).find('form').serializeArray();
 
@@ -113,7 +114,7 @@ define('admin/extend/widgets', function() {
 					template: template,
 					location: location,
 					widgets: widgets
-				}, function(err) {
+				}, function (err) {
 					total--;
 
 					if (err) {
@@ -124,8 +125,8 @@ define('admin/extend/widgets', function() {
 						app.alert({
 							alert_id: 'admin:widgets',
 							type: 'success',
-							title: 'Widgets Updated',
-							message: 'Successfully updated widgets',
+							title: '[[admin/extend/widgets:alert.updated]]',
+							message: '[[admin/extend/widgets:alert.update-success]]',
 							timeout: 2500
 						});
 					}
@@ -134,13 +135,13 @@ define('admin/extend/widgets', function() {
 			});
 		}
 
-		$('.color-selector').on('click', '.btn', function() {
+		$('.color-selector').on('click', '.btn', function () {
 			var btn = $(this),
 				selector = btn.parents('.color-selector'),
 				container = selector.parents('[data-container-html]'),
 				classList = [];
 
-			selector.children().each(function() {
+			selector.children().each(function () {
 				classList.push($(this).attr('data-class'));
 			});
 
@@ -154,12 +155,21 @@ define('admin/extend/widgets', function() {
 		});
 	}
 
+	function createDatePicker(el) {
+		var currentYear = new Date().getFullYear();
+		el.find('.date-selector').datepicker({
+			changeMonth: true,
+			changeYear: true,
+			yearRange: currentYear + ':' + (currentYear + 100)
+		});
+	}
+
 	function appendToggle(el) {
 		if (!el.hasClass('block')) {
-			el.addClass('block')
+			el.addClass('block').css('width', '').css('height', '')
 				.droppable({
 					accept: '[data-container-html]',
-					drop: function(event, ui) {
+					drop: function (event, ui) {
 						var el = $(this);
 
 						el.find('.panel-body .container-html').val(ui.draggable.attr('data-container-html'));
@@ -180,7 +190,7 @@ define('admin/extend/widgets', function() {
 				title.text(title.text() + ' - ' + data.title);
 			}
 
-			widget.find('input, textarea, select').each(function() {
+			widget.find('input, textarea, select').each(function () {
 				var input = $(this),
 					value = data[input.attr('name')];
 
@@ -194,21 +204,22 @@ define('admin/extend/widgets', function() {
 			return widget;
 		}
 
-		$.get(RELATIVE_PATH + '/api/admin/extend/widgets', function(data) {
+		$.get(RELATIVE_PATH + '/api/admin/extend/widgets', function (data) {
 			var areas = data.areas;
 
-			for(var i=0; i<areas.length; ++i) {
+			for(var i = 0; i < areas.length; ++i) {
 				var area = areas[i],
 					widgetArea = $('#widgets .area[data-template="' + area.template + '"][data-location="' + area.location + '"]').find('.widget-area');
 
 				widgetArea.html('');
 
-				for (var k=0; k<area.data.length; ++k) {
+				for (var k = 0; k < area.data.length; ++k) {
 					var widgetData = area.data[k],
 						widgetEl = $('.available-widgets [data-widget="' + widgetData.widget + '"]').clone(true).removeClass('hide');
 
 					widgetArea.append(populateWidget(widgetEl, widgetData.data));
 					appendToggle(widgetEl);
+					createDatePicker(widgetEl);
 				}
 			}
 

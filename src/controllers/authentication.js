@@ -6,6 +6,7 @@ var passport = require('passport');
 var nconf = require('nconf');
 var validator = require('validator');
 var _ = require('underscore');
+var url = require('url');
 
 var db = require('../database');
 var meta = require('../meta');
@@ -14,9 +15,11 @@ var plugins = require('../plugins');
 var utils = require('../../public/src/utils');
 var Password = require('../password');
 
+var sockets = require('../socket.io');
+
 var authenticationController = {};
 
-authenticationController.register = function(req, res, next) {
+authenticationController.register = function (req, res, next) {
 	var registrationType = meta.config.registrationType || 'normal';
 
 	if (registrationType === 'disabled') {
@@ -32,14 +35,14 @@ authenticationController.register = function(req, res, next) {
 	}
 
 	async.waterfall([
-		function(next) {
+		function (next) {
 			if (registrationType === 'invite-only' || registrationType === 'admin-invite-only') {
 				user.verifyInvitation(userData, next);
 			} else {
 				next();
 			}
 		},
-		function(next) {
+		function (next) {
 			if (!userData.email) {
 				return next(new Error('[[error:invalid-email]]'));
 			}
@@ -54,28 +57,33 @@ authenticationController.register = function(req, res, next) {
 
 			user.isPasswordValid(userData.password, next);
 		},
-		function(next) {
-			res.locals.processLogin = true;	// set it to false in plugin if you wish to just register only
-			plugins.fireHook('filter:register.check', {req: req, res: res, userData: userData}, next);
-		},
-		function(data, next) {
+		function (next) {
 			if (registrationType === 'normal' || registrationType === 'invite-only' || registrationType === 'admin-invite-only') {
-				registerAndLoginUser(req, res, userData, next);
+				next(null, false);
 			} else if (registrationType === 'admin-approval') {
-				addToApprovalQueue(req, userData, next);
+				next(null, true);
 			} else if (registrationType === 'admin-approval-ip') {
-				db.sortedSetCard('ip:' + req.ip + ':uid', function(err, count) {
+				db.sortedSetCard('ip:' + req.ip + ':uid', function (err, count) {
 					if (err) {
 						next(err);
-					} else if (count) {
-						addToApprovalQueue(req, userData, next);
 					} else {
-						registerAndLoginUser(req, res, userData, next);
+						next(null, !!count);
 					}
 				});
 			}
+		},
+		function (queue, next) {
+			res.locals.processLogin = true;	// set it to false in plugin if you wish to just register only
+			plugins.fireHook('filter:register.check', {req: req, res: res, userData: userData, queue: queue}, next);
+		},
+		function (data, next) {
+			if (data.queue) {
+				addToApprovalQueue(req, userData, next);
+			} else {
+				registerAndLoginUser(req, res, userData, next);
+			}
 		}
-	], function(err, data) {
+	], function (err, data) {
 		if (err) {
 			return res.status(400).send(err.message);
 		}
@@ -91,11 +99,15 @@ authenticationController.register = function(req, res, next) {
 function registerAndLoginUser(req, res, userData, callback) {
 	var uid;
 	async.waterfall([
-		function(next) {
+		function (next) {
 			plugins.fireHook('filter:register.interstitial', {
 				userData: userData,
 				interstitials: []
-			}, function(err, data) {
+			}, function (err, data) {
+				if (err) {
+					return next(err);
+				}
+
 				// If interstitials are found, save registration attempt into session and abort
 				var deferRegistration = data.interstitials.length;
 
@@ -108,10 +120,10 @@ function registerAndLoginUser(req, res, userData, callback) {
 				}
 			});
 		},
-		function(next) {
+		function (next) {
 			user.create(userData, next);
 		},
-		function(_uid, next) {
+		function (_uid, next) {
 			uid = _uid;
 			if (res.locals.processLogin) {
 				authenticationController.doLogin(req, uid, next);
@@ -119,7 +131,7 @@ function registerAndLoginUser(req, res, userData, callback) {
 				next();
 			}
 		},
-		function(next) {
+		function (next) {
 			user.deleteInvitationKey(userData.email);
 			plugins.fireHook('filter:register.complete', {uid: uid, referrer: req.body.referrer || nconf.get('relative_path') + '/'}, next);
 		}
@@ -128,23 +140,27 @@ function registerAndLoginUser(req, res, userData, callback) {
 
 function addToApprovalQueue(req, userData, callback) {
 	async.waterfall([
-		function(next) {
+		function (next) {
 			userData.ip = req.ip;
 			user.addToApprovalQueue(userData, next);
 		},
-		function(next) {
+		function (next) {
 			next(null, {message: '[[register:registration-added-to-queue]]'});
 		}
 	], callback);
 }
 
-authenticationController.registerComplete = function(req, res, next) {
+authenticationController.registerComplete = function (req, res, next) {
 	// For the interstitials that respond, execute the callback with the form body
 	plugins.fireHook('filter:register.interstitial', {
 		userData: req.session.registration,
 		interstitials: []
-	}, function(err, data) {
-		var callbacks = data.interstitials.reduce(function(memo, cur) {
+	}, function (err, data) {
+		if (err) {
+			return next(err);
+		}
+
+		var callbacks = data.interstitials.reduce(function (memo, cur) {
 			if (cur.hasOwnProperty('callback') && typeof cur.callback === 'function') {
 				memo.push(async.apply(cur.callback, req.session.registration, req.body));
 			}
@@ -152,7 +168,7 @@ authenticationController.registerComplete = function(req, res, next) {
 			return memo;
 		}, []);
 
-		var done = function() {
+		var done = function () {
 			delete req.session.registration;
 
 			if (req.session.returnTo) {
@@ -160,9 +176,9 @@ authenticationController.registerComplete = function(req, res, next) {
 			} else {
 				res.redirect(nconf.get('relative_path') + '/');
 			}
-		}
+		};
 
-		async.parallel(callbacks, function(err) {
+		async.parallel(callbacks, function (err) {
 			if (err) {
 				req.flash('error', err.message);
 				return res.redirect(nconf.get('relative_path') + '/register/complete');
@@ -179,19 +195,14 @@ authenticationController.registerComplete = function(req, res, next) {
 	});
 };
 
-authenticationController.registerAbort = function(req, res, next) {
+authenticationController.registerAbort = function (req, res) {
 	// End the session and redirect to home
-	req.session.destroy(function() {
+	req.session.destroy(function () {
 		res.redirect(nconf.get('relative_path') + '/');
 	});
 };
 
-authenticationController.login = function(req, res, next) {
-	// Handle returnTo data
-	if (req.body.hasOwnProperty('returnTo') && !req.session.returnTo) {
-		req.session.returnTo = req.body.returnTo;
-	}
-
+authenticationController.login = function (req, res, next) {
 	if (plugins.hasListeners('action:auth.overrideLogin')) {
 		return continueLogin(req, res, next);
 	}
@@ -199,7 +210,7 @@ authenticationController.login = function(req, res, next) {
 	var loginWith = meta.config.allowLoginWith || 'username-email';
 
 	if (req.body.username && utils.isEmailValid(req.body.username) && loginWith.indexOf('email') !== -1) {
-		user.getUsernameByEmail(req.body.username, function(err, username) {
+		user.getUsernameByEmail(req.body.username, function (err, username) {
 			if (err) {
 				return next(err);
 			}
@@ -214,7 +225,7 @@ authenticationController.login = function(req, res, next) {
 };
 
 function continueLogin(req, res, next) {
-	passport.authenticate('local', function(err, userData, info) {
+	passport.authenticate('local', function (err, userData, info) {
 		if (err) {
 			return res.status(403).send(err.message);
 		}
@@ -242,11 +253,15 @@ function continueLogin(req, res, next) {
 		if (passwordExpiry && passwordExpiry < Date.now()) {
 			winston.verbose('[auth] Triggering password reset for uid ' + userData.uid + ' due to password policy');
 			req.session.passwordExpired = true;
-			user.reset.generate(userData.uid, function(err, code) {
+			user.reset.generate(userData.uid, function (err, code) {
+				if (err) {
+					return res.status(403).send(err.message);
+				}
+
 				res.status(200).send(nconf.get('relative_path') + '/reset/' + code);
 			});
 		} else {
-			authenticationController.doLogin(req, userData.uid, function(err) {
+			authenticationController.doLogin(req, userData.uid, function (err) {
 				if (err) {
 					return res.status(403).send(err.message);
 				}
@@ -264,12 +279,12 @@ function continueLogin(req, res, next) {
 	})(req, res, next);
 }
 
-authenticationController.doLogin = function(req, uid, callback) {
+authenticationController.doLogin = function (req, uid, callback) {
 	if (!uid) {
 		return callback();
 	}
 
-	req.login({uid: uid}, function(err) {
+	req.login({uid: uid}, function (err) {
 		if (err) {
 			return callback(err);
 		}
@@ -278,8 +293,8 @@ authenticationController.doLogin = function(req, uid, callback) {
 	});
 };
 
-authenticationController.onSuccessfulLogin = function(req, uid, callback) {
-	callback = callback || function() {};
+authenticationController.onSuccessfulLogin = function (req, uid, callback) {
+	callback = callback || function () {};
 	var uuid = utils.generateUUID();
 	req.session.meta = {};
 
@@ -304,18 +319,25 @@ authenticationController.onSuccessfulLogin = function(req, uid, callback) {
 			user.auth.addSession(uid, req.sessionID, next);
 		},
 		function (next) {
-			db.setObjectField('uid:' + uid + 'sessionUUID:sessionId', uuid, req.sessionID, next);
+			db.setObjectField('uid:' + uid + ':sessionUUID:sessionId', uuid, req.sessionID, next);
+		},
+		function (next) {
+			user.updateLastOnlineTime(uid, next);
 		}
-	], function(err) {
+	], function (err) {
 		if (err) {
 			return callback(err);
 		}
+
+		// Force session check for all connected socket.io clients with the same session id
+		sockets.in('sess_' + req.sessionID).emit('checkSession', uid);
+
 		plugins.fireHook('action:user.loggedIn', uid);
 		callback();
 	});
 };
 
-authenticationController.localLogin = function(req, username, password, next) {
+authenticationController.localLogin = function (req, username, password, next) {
 	if (!username) {
 		return next(new Error('[[error:invalid-username]]'));
 	}
@@ -339,13 +361,13 @@ authenticationController.localLogin = function(req, username, password, next) {
 		},
 		function (next) {
 			async.parallel({
-				userData: function(next) {
+				userData: function (next) {
 					db.getObjectFields('user:' + uid, ['password', 'passwordExpiry'], next);
 				},
-				isAdmin: function(next) {
+				isAdmin: function (next) {
 					user.isAdministrator(uid, next);
 				},
-				banned: function(next) {
+				banned: function (next) {
 					user.isBanned(uid, next);
 				}
 			}, next);
@@ -362,7 +384,20 @@ authenticationController.localLogin = function(req, username, password, next) {
 				return next(new Error('[[error:invalid-user-data]]'));
 			}
 			if (result.banned) {
-				return next(new Error('[[error:user-banned]]'));
+				// Retrieve ban reason and show error
+				return user.getLatestBanInfo(uid, function (err, banInfo) {
+					if (err) {
+						if (err.message === 'no-ban-info') {
+							next(new Error('[[error:user-banned]]'));
+						} else {
+							next(err);
+						}
+					} else if (banInfo.reason) {
+						next(new Error('[[error:user-banned-reason, ' + banInfo.reason + ']]'));
+					} else {
+						next(new Error('[[error:user-banned]]'));
+					}
+				});
 			}
 
 			Password.compare(password, userData.password, next);
@@ -377,10 +412,12 @@ authenticationController.localLogin = function(req, username, password, next) {
 	], next);
 };
 
-authenticationController.logout = function(req, res, next) {
+authenticationController.logout = function (req, res, next) {
 	if (req.user && parseInt(req.user.uid, 10) > 0 && req.sessionID) {
 		var uid = parseInt(req.user.uid, 10);
-		user.auth.revokeSession(req.sessionID, uid, function(err) {
+		var sessionID = req.sessionID;
+
+		user.auth.revokeSession(sessionID, uid, function (err) {
 			if (err) {
 				return next(err);
 			}
@@ -389,8 +426,11 @@ authenticationController.logout = function(req, res, next) {
 
 			user.setUserField(uid, 'lastonline', Date.now() - 300000);
 
-			plugins.fireHook('static:user.loggedOut', {req: req, res: res, uid: uid}, function() {
+			plugins.fireHook('static:user.loggedOut', {req: req, res: res, uid: uid}, function () {
 				res.status(200).send('');
+
+				// Force session check for all connected socket.io clients with the same session id
+				sockets.in('sess_' + sessionID).emit('checkSession', 0);
 			});
 		});
 	} else {

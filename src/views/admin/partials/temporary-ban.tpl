@@ -1,13 +1,32 @@
-<form class="form-inline">
-	<div class="form-group text-center">
-		<label for="days">Ban Length</label>
-		<input class="form-control" name="length" type="number" min="1" value="1" /><br />
-		<label>Hours</label>
-		<input type="radio" name="unit" value="0" checked />
-		<label>Days</label>
-		<input type="radio" name="unit" value="1" />
+<form class="form">
+	<div class="row">
+		<div class="col-xs-4">
+			<div class="form-group">
+				<label for="length">[[admin/manage/users:temp-ban.length]]</label>
+				<input class="form-control" id="length" name="length" type="number" min="0" value="1" />
+			</div>
+		</div>
+		<div class="col-xs-8">
+			<div class="form-group">
+				<label for="reason">[[admin/manage/users:temp-ban.reason]]</label>
+				<input type="text" class="form-control" id="reason" name="reason" />
+			</div>
+		</div>
 	</div>
-	<p class="help-block">
-		Enter the length of time for the ban. Note that a time of 0 will be a considered a permanent ban.
-	</p>
+	<div class="row">
+		<div class="col-sm-4 text-center">
+			<div class="form-group units">
+				<label>[[admin/manage/users:temp-ban.hours]]</label>
+				<input type="radio" name="unit" value="0" checked />
+				&nbsp;&nbsp;
+				<label>[[admin/manage/users:temp-ban.days]]</label>
+				<input type="radio" name="unit" value="1" />
+			</div>
+		</div>
+		<div class="col-sm-8">
+			<p class="help-block">
+				[[admin/manage/users:temp-ban.explanation]]
+			</p>
+		</div>
+	</div>
 </form>

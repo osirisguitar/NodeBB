@@ -1,9 +1,18 @@
 "use strict";
 
-var topics = require('../../topics'),
-	Tags = {};
+var topics = require('../../topics');
 
-Tags.update = function(socket, data, callback) {
+var Tags = module.exports;
+
+Tags.create = function (socket, data, callback) {
+	if (!data) {
+		return callback(new Error('[[error:invalid-data]]'));
+	}
+
+	topics.createEmptyTag(data.tag, callback);
+};
+
+Tags.update = function (socket, data, callback) {
 	if (!data) {
 		return callback(new Error('[[error:invalid-data]]'));
 	}
@@ -11,9 +20,10 @@ Tags.update = function(socket, data, callback) {
 	topics.updateTag(data.tag, data, callback);
 };
 
-Tags.deleteTags = function(socket, data, callback) {
+Tags.deleteTags = function (socket, data, callback) {
+	if (!data) {
+		return callback(new Error('[[error:invalid-data]]'));
+	}
+
 	topics.deleteTags(data.tags, callback);
 };
-
-
-module.exports = Tags;

@@ -4,12 +4,15 @@ var meta = require('../../meta');
 
 var blacklistController = {};
 
-blacklistController.get = function(req, res, next) {
-	meta.blacklist.get(function(err, rules) {
+blacklistController.get = function (req, res, next) {
+	meta.blacklist.get(function (err, rules) {
 		if (err) {
 			return next(err);
 		}
-		res.render('admin/manage/ip-blacklist', {rules: rules, title: 'IP Blacklist'});
+		res.render('admin/manage/ip-blacklist', {
+			rules: rules,
+			title: '[[pages:ip-blacklist]]'
+		});
 	});
 };
 

@@ -3,20 +3,22 @@
 var nconf = require('nconf');
 var url = require('url');
 var winston = require('winston');
+var S = require('string');
 
+var meta = require('../meta');
 var cache = require('./cache');
 var plugins = require('../plugins');
 var translator = require('../../public/src/modules/translator');
 
 var urlRegex = /href="([^"]+)"/g;
 
-module.exports = function(Posts) {
+module.exports = function (Posts) {
 
-	Posts.parsePost = function(postData, callback) {
+	Posts.parsePost = function (postData, callback) {
 		postData.content = postData.content || '';
 
-		if (postData.pid && cache.has(postData.pid)) {
-			postData.content = cache.get(postData.pid);
+		if (postData.pid && cache.has(String(postData.pid))) {
+			postData.content = cache.get(String(postData.pid));
 			return callback(null, postData);
 		}
 
@@ -25,7 +27,7 @@ module.exports = function(Posts) {
 			postData.content = postData.content.toString();
 		}
 
-		plugins.fireHook('filter:parse.post', {postData: postData}, function(err, data) {
+		plugins.fireHook('filter:parse.post', {postData: postData}, function (err, data) {
 			if (err) {
 				return callback(err);
 			}
@@ -33,20 +35,19 @@ module.exports = function(Posts) {
 			data.postData.content = translator.escape(data.postData.content);
 
 			if (global.env === 'production' && data.postData.pid) {
-				cache.set(data.postData.pid, data.postData.content);
+				cache.set(String(data.postData.pid), data.postData.content);
 			}
 
 			callback(null, data.postData);
 		});
 	};
 
-	Posts.parseSignature = function(userData, uid, callback) {
-		userData.signature = userData.signature || '';
-
+	Posts.parseSignature = function (userData, uid, callback) {
+		userData.signature = sanitizeSignature(userData.signature || '');
 		plugins.fireHook('filter:parse.signature', {userData: userData, uid: uid}, callback);
 	};
 
-	Posts.relativeToAbsolute = function(content) {
+	Posts.relativeToAbsolute = function (content) {
 		// Turns relative links in post body to absolute urls
 		var parsed, current, absolute;
 
@@ -73,4 +74,19 @@ module.exports = function(Posts) {
 
 		return content;
 	};
+
+	function sanitizeSignature(signature) {
+		var	string = S(signature),
+			tagsToStrip = [];
+
+		if (parseInt(meta.config['signatures:disableLinks'], 10) === 1) {
+			tagsToStrip.push('a');
+		}
+
+		if (parseInt(meta.config['signatures:disableImages'], 10) === 1) {
+			tagsToStrip.push('img');
+		}
+
+		return tagsToStrip.length ? string.stripTags.apply(string, tagsToStrip).s : signature;
+	}
 };

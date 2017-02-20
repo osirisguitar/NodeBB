@@ -12,9 +12,9 @@
     "ignore": "התעלם",
     "watching": "Watching",
     "ignoring": "Ignoring",
-    "watching.description": "Show topics in unread",
-    "ignoring.description": "Do not show topics in unread",
-    "watch.message": "אתה עכשיו עוקב אחרי עדכונים מקטגוריה זו",
-    "ignore.message": "אתה עכשיו מתעלם מעדכונים מקטגוריה זו",
+    "watching.description": "צפה בנושאים שלא נקראו",
+    "ignoring.description": "אל תציג נושאים שאינם נקראו",
+    "watch.message": "You are now watching updates from this category and all subcategories",
+    "ignore.message": "You are now ignoring updates from this category and all subcategories",
     "watched-categories": "קטגוריות נעקבות"
 }
